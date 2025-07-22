@@ -3,24 +3,17 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Allow all origins during debugging
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'https://speech-predictor.vercel.app'
-  ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 200
+  origin: '*',
+  methods: ['GET', 'POST'],
 }));
 
-app.options('/predict', cors());
 app.use(bodyParser.json());
 
 app.post('/predict', async (req, res) => {
@@ -33,25 +26,21 @@ app.post('/predict', async (req, res) => {
     return res.status(400).json({ error: "Transcript is required" });
   }
 
-  // Try debug script first, then fallback to original
   const debugScriptPath = path.join(__dirname, '..', 'scripts', 'debug_predict.py');
   const originalScriptPath = path.join(__dirname, '..', 'scripts', 'predict.py');
-  
-  // Use debug script if it exists, otherwise use original
-  const scriptPath = require('fs').existsSync(debugScriptPath) ? debugScriptPath : originalScriptPath;
-  
-  console.log("📁 Using script path:", scriptPath);
-  console.log("📁 Script exists:", require('fs').existsSync(scriptPath));
+  const scriptPath = fs.existsSync(debugScriptPath) ? debugScriptPath : originalScriptPath;
 
-  // Try different Python commands
+  console.log("📁 Using script path:", scriptPath);
+  console.log("📁 Script exists:", fs.existsSync(scriptPath));
+
   const pythonCommands = ['python3', 'python', 'py'];
-  
+
   for (const pythonCmd of pythonCommands) {
     console.log(`🐍 Trying Python command: ${pythonCmd}`);
-    
+
     try {
       const python = spawn(pythonCmd, [scriptPath]);
-      
+
       python.stdin.write(JSON.stringify({ transcript }));
       python.stdin.end();
 
@@ -69,28 +58,20 @@ app.post('/predict', async (req, res) => {
 
       python.on('close', (code) => {
         console.log(`🔚 Python process (${pythonCmd}) exited with code`, code);
-        
+
         if (code !== 0) {
-          console.error(`❌ Python script failed with code: ${code}`);
-          console.error(`❌ Error output: ${errorOutput}`);
-          
-          // If this isn't the last command to try, continue to next
-          if (pythonCmd !== pythonCommands[pythonCommands.length - 1]) {
-            return;
-          }
-          
-          return res.status(500).json({ 
-            error: "Python script error", 
+          if (pythonCmd !== pythonCommands[pythonCommands.length - 1]) return;
+          return res.status(500).json({
+            error: "Python script error",
             details: errorOutput,
-            code: code,
+            code,
             pythonCommand: pythonCmd,
-            scriptPath: scriptPath
+            scriptPath
           });
         }
 
         if (!output.trim()) {
-          console.error("❗ No output from Python script");
-          return res.status(500).json({ 
+          return res.status(500).json({
             error: "No output from Python script",
             stderr: errorOutput,
             pythonCommand: pythonCmd
@@ -100,43 +81,34 @@ app.post('/predict', async (req, res) => {
         try {
           const result = JSON.parse(output);
           console.log("✅ Result sent to frontend:", result);
-          res.json({ 
+          res.json({
             prediction: result.prediction,
             debug_info: result.debug_info,
             pythonCommand: pythonCmd
           });
-          return; // Success, exit the loop
+          return;
         } catch (err) {
-          console.error("❗ Failed to parse Python output:", output);
-          console.error("❗ Parse error:", err.message);
-          res.status(500).json({ 
-            error: "Invalid Python response", 
-            output: output,
+          return res.status(500).json({
+            error: "Invalid Python response",
+            output,
             stderr: errorOutput,
             pythonCommand: pythonCmd
           });
-          return;
         }
       });
 
       python.on('error', (err) => {
         console.error(`❌ Failed to start Python process (${pythonCmd}):`, err);
-        
-        // If this isn't the last command to try, continue to next
-        if (pythonCmd !== pythonCommands[pythonCommands.length - 1]) {
-          return;
-        }
-        
-        res.status(500).json({ 
-          error: "Failed to start Python process", 
+        if (pythonCmd !== pythonCommands[pythonCommands.length - 1]) return;
+
+        res.status(500).json({
+          error: "Failed to start Python process",
           details: err.message,
           pythonCommand: pythonCmd
         });
       });
 
-      // If we get here, the process started successfully, so break the loop
       break;
-      
     } catch (err) {
       console.error(`❌ Error with Python command ${pythonCmd}:`, err);
       continue;
@@ -144,7 +116,7 @@ app.post('/predict', async (req, res) => {
   }
 });
 
-// Enhanced test endpoint
+// Test endpoint to check backend status
 app.get('/test', (req, res) => {
   const debugInfo = {
     message: "Backend is working!",
@@ -154,11 +126,11 @@ app.get('/test', (req, res) => {
     scriptPath: path.join(__dirname, '..', 'scripts', 'predict.py'),
     debugScriptPath: path.join(__dirname, '..', 'scripts', 'debug_predict.py'),
     scriptsExist: {
-      original: require('fs').existsSync(path.join(__dirname, '..', 'scripts', 'predict.py')),
-      debug: require('fs').existsSync(path.join(__dirname, '..', 'scripts', 'debug_predict.py'))
+      original: fs.existsSync(path.join(__dirname, '..', 'scripts', 'predict.py')),
+      debug: fs.existsSync(path.join(__dirname, '..', 'scripts', 'debug_predict.py'))
     }
   };
-  
+
   res.json(debugInfo);
 });
 
