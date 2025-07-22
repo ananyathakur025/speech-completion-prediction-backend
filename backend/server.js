@@ -8,7 +8,6 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Allow all origins during debugging
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST'],
@@ -26,8 +25,9 @@ app.post('/predict', async (req, res) => {
     return res.status(400).json({ error: "Transcript is required" });
   }
 
-  const debugScriptPath = path.join(__dirname, '..', 'scripts', 'debug_predict.py');
-  const originalScriptPath = path.join(__dirname, '..', 'scripts', 'predict.py');
+  // ✅ Updated paths — predict.py now lives in same folder as server.js
+  const debugScriptPath = path.join(__dirname, 'debug_predict.py');
+  const originalScriptPath = path.join(__dirname, 'predict.py');
   const scriptPath = fs.existsSync(debugScriptPath) ? debugScriptPath : originalScriptPath;
 
   console.log("📁 Using script path:", scriptPath);
@@ -116,18 +116,18 @@ app.post('/predict', async (req, res) => {
   }
 });
 
-// Test endpoint to check backend status
+// ✅ Updated paths in /test too
 app.get('/test', (req, res) => {
   const debugInfo = {
     message: "Backend is working!",
     nodeVersion: process.version,
     platform: process.platform,
     cwd: process.cwd(),
-    scriptPath: path.join(__dirname, '..', 'scripts', 'predict.py'),
-    debugScriptPath: path.join(__dirname, '..', 'scripts', 'debug_predict.py'),
+    scriptPath: path.join(__dirname, 'predict.py'),
+    debugScriptPath: path.join(__dirname, 'debug_predict.py'),
     scriptsExist: {
-      original: fs.existsSync(path.join(__dirname, '..', 'scripts', 'predict.py')),
-      debug: fs.existsSync(path.join(__dirname, '..', 'scripts', 'debug_predict.py'))
+      original: fs.existsSync(path.join(__dirname, 'predict.py')),
+      debug: fs.existsSync(path.join(__dirname, 'debug_predict.py'))
     }
   };
 
