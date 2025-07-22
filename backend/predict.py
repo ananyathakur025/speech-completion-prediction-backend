@@ -16,8 +16,8 @@ except ImportError as e:
 
 # ✅ Get the script directory and construct proper paths
 script_dir = Path(__file__).parent
-# Since script is in scripts/ and model is in root/model/, we need to go up one level
-model_path = script_dir.parent / "model" / "random_forest_model.pkl"
+# Model is now in the same directory as this script
+model_path = script_dir / "random_forest_model.pkl"
 
 print(f"Looking for model at: {model_path}", file=sys.stderr)
 
@@ -73,7 +73,6 @@ def extract_features(embeddings):
                 last_cp = change_points[-2] if len(change_points) > 1 else 0
             except Exception as e:
                 print(f"⚠️ Change point detection failed: {e}", file=sys.stderr)
-                # Return default values if change point detection fails
                 num_cps = 0
                 last_cp = 0
 
@@ -85,7 +84,6 @@ def extract_features(embeddings):
 def predict_progress(text):
     """Predict speech completion progress"""
     try:
-        # Split into chunks (sentences)
         chunks = text.strip().split(".")
         chunks = [c.strip() for c in chunks if c.strip()]
         
@@ -95,27 +93,23 @@ def predict_progress(text):
 
         print(f"Processing {len(chunks)} chunks", file=sys.stderr)
         
-        # Get embeddings for each chunk
         embeddings = embedder.encode(chunks)
         print("✅ Embeddings created", file=sys.stderr)
         
-        # Extract features
         mean_novelty, var_novelty, num_cps, last_cp = extract_features(embeddings)
         print(f"✅ Features extracted: novelty={mean_novelty:.3f}, var={var_novelty:.3f}, cps={num_cps}, last_cp={last_cp}", file=sys.stderr)
 
-        # Prepare features for model
         i = len(chunks)
         features = [
-            i / avg_speech_len,  # relative position
-            mean_novelty,        # semantic novelty
-            var_novelty,         # novelty variance
-            num_cps,            # number of change points
-            last_cp / avg_speech_len,  # last change point position
+            i / avg_speech_len,
+            mean_novelty,
+            var_novelty,
+            num_cps,
+            last_cp / avg_speech_len,
         ]
         
         print(f"✅ Feature vector: {features}", file=sys.stderr)
         
-        # Make prediction
         pred = reg.predict([features])[0]
         result = float(round(min(max(pred, 0), 100), 2))
         
@@ -124,7 +118,6 @@ def predict_progress(text):
         
     except Exception as e:
         print(f"❌ Error in predict_progress: {e}", file=sys.stderr)
-        # Return a reasonable default based on text length
         words = text.split()
         if len(words) < 50:
             return 25.0
@@ -137,7 +130,6 @@ if __name__ == "__main__":
     try:
         print("🐍 Python script started", file=sys.stderr)
         
-        # Read input from stdin
         input_data = sys.stdin.read()
         print(f"📥 Received input: {input_data[:100]}...", file=sys.stderr)
         
@@ -151,8 +143,6 @@ if __name__ == "__main__":
         print(f"📝 Processing transcript: {text[:100]}...", file=sys.stderr)
         
         result = predict_progress(text)
-        
-        # Output the result as JSON
         output = {"prediction": result}
         print(json.dumps(output))
         
